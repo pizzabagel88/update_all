@@ -173,6 +173,9 @@ try {
     Write-Host "  BIOS Date: $($bios.ReleaseDate)" -ForegroundColor Gray
     Write-Host "  Motherboard: $($baseBoard.Product)" -ForegroundColor Gray
     Write-Host ''
+    Write-Host '  Note: Automated BIOS version checking is not available.' -ForegroundColor Yellow
+    Write-Host '  Please manually check the manufacturer website for BIOS updates.' -ForegroundColor Yellow
+    Write-Host ''
     Write-Host '  To check for firmware updates, visit your manufacturer website:' -ForegroundColor Yellow
     Write-Host "  - ASRock: https://www.asrock.com/" -ForegroundColor Gray
     Write-Host "  - ASUS: https://www.asus.com/" -ForegroundColor Gray
@@ -189,15 +192,27 @@ Write-Host ''
 # Section 8: Check graphics card firmware/drivers
 Write-Host '[8/8] Checking graphics card firmware/drivers...' -ForegroundColor Yellow
 try {
-    $gpu = Get-CimInstance -ClassName Win32_VideoController | Select-Object -First 1
-    if ($gpu) {
-        Write-Host "  Graphics Card: $($gpu.Name)" -ForegroundColor Gray
-        Write-Host "  Driver Version: $($gpu.DriverVersion)" -ForegroundColor Gray
-        Write-Host "  Driver Date: $($gpu.DriverDate)" -ForegroundColor Gray
+    $gpus = Get-CimInstance -ClassName Win32_VideoController
+    $physicalGpu = $null
+    
+    # Look for physical GPU, skip virtual adapters
+    foreach ($gpu in $gpus) {
+        $gpuName = $gpu.Name
+        # Skip virtual adapters (Meta, Microsoft Basic Display, Remote Desktop, etc.)
+        if ($gpuName -notmatch 'Virtual|Remote|Basic Display|Microsoft Hyper-V|Miracast|Indirect') {
+            $physicalGpu = $gpu
+            break
+        }
+    }
+    
+    if ($physicalGpu) {
+        Write-Host "  Graphics Card: $($physicalGpu.Name)" -ForegroundColor Gray
+        Write-Host "  Driver Version: $($physicalGpu.DriverVersion)" -ForegroundColor Gray
+        Write-Host "  Driver Date: $($physicalGpu.DriverDate)" -ForegroundColor Gray
         Write-Host ''
         
         # Detect GPU manufacturer
-        $gpuName = $gpu.Name
+        $gpuName = $physicalGpu.Name
         if ($gpuName -match 'NVIDIA|GeForce|Quadro|RTX|GTX') {
             Write-Host '  NVIDIA GPU detected. Check for updates at: https://www.nvidia.com/Download/index.aspx' -ForegroundColor Yellow
         } elseif ($gpuName -match 'AMD|Radeon|RX') {
@@ -208,6 +223,10 @@ try {
             Write-Host '  GPU manufacturer not automatically detected. Check manufacturer website for driver updates.' -ForegroundColor Yellow
         }
         Write-Host '✓ Graphics card information displayed' -ForegroundColor Green
+    } elseif ($gpus) {
+        Write-Host '  Only virtual display adapters detected (no physical GPU found)' -ForegroundColor Yellow
+        Write-Host '  Virtual adapters: ' + ($gpus.Name -join ', ') -ForegroundColor Gray
+        Write-Host '  Check your system for a physical graphics card.' -ForegroundColor Yellow
     } else {
         Write-Host '  No graphics card detected' -ForegroundColor Gray
     }
