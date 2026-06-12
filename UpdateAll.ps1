@@ -243,5 +243,9 @@ Write-Host ''
 Write-Host 'Note: Some updates may require a system restart.' -ForegroundColor Yellow
 Write-Host 'For driver and firmware updates, check your manufacturer website.' -ForegroundColor Yellow
 Write-Host ''
+Write-Host 'Manual Update Links:' -ForegroundColor Cyan
+Write-Host '  ASRock BIOS: https://pg.asrock.com/mb/AMD/B650E%20PG%20Riptide%20WiFi/index.asp#BIOS' -ForegroundColor Gray
+Write-Host '  NVIDIA Drivers: https://www.nvidia.com/Download/index.aspx' -ForegroundColor Gray
+Write-Host ''
 Write-Host 'Press any key to exit...' -ForegroundColor Cyan
 $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
