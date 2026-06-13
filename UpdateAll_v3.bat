@@ -11,5 +11,5 @@ if %errorLevel% == 0 (
     pause >nul
 )
 
-powershell -ExecutionPolicy Bypass -File "%~dp0UpdateAll_perplexity.ps1"
+powershell -ExecutionPolicy Bypass -File "%~dp0UpdateAll_v3.ps1"
 pause
