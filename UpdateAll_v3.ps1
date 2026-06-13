@@ -497,39 +497,31 @@ function Update-PythonPackages {
                         $packages = @($parsed)
                     }
 
-                    $packages = @(
-                        $packages | Where-Object {
-                            $_ -and
-                            $_.PSObject.Properties.Match('name').Count -gt 0 -and
-                            -not [string]::IsNullOrWhiteSpace([string]$_.name)
-                        }
-                    )
+                    $toUpdate = $packages | Where-Object {
+                        $_ -and
+                        $_.PSObject.Properties.Match('name').Count -gt 0 -and
+                        -not [string]::IsNullOrWhiteSpace([string]$_.name)
+                    } | ForEach-Object { [string]$_.name }
 
-                    $result.OutdatedCount = $packages.Count
+                    $result.OutdatedCount = $toUpdate.Count
 
-                    if ($packages.Count -eq 0) {
+                    if ($toUpdate.Count -eq 0) {
                         Write-Ok 'No outdated Python packages found'
                     } else {
-                        foreach ($pkg in $packages) {
-                            $name = [string]$pkg.name
-                            $current = [string]$pkg.version
-                            $latest = [string]$pkg.latest_version
-
-                            if ([string]::IsNullOrWhiteSpace($name)) {
-                                continue
-                            }
-
-                            Write-Host ('  Updating ' + $name + ' (' + $current + ' -> ' + $latest + ')...') -ForegroundColor Gray
-                            & python -m pip install --upgrade $name
-                            if ($LASTEXITCODE -eq 0) {
-                                $result.UpdatedPackages++
-                            } else {
-                                Write-Err ('Failed to update Python package ' + $name + ' (exit code ' + $LASTEXITCODE + ')')
-                                $result.Errors.Add('package update failed: ' + $name) | Out-Null
+                        Write-Host ("  Updating $($toUpdate.Count) packages in batch...") -ForegroundColor Gray
+                        # Update all packages in a single pip call for better performance
+                        & python -m pip install --upgrade $toUpdate
+                        if ($LASTEXITCODE -eq 0) {
+                            $result.UpdatedPackages = $toUpdate.Count
+                            Write-Ok ("Python packages updated: $($toUpdate.Count)")
+                        } else {
+                            Write-Err "Batch Python package update failed. Attempting individual updates..."
+                            foreach ($pkgName in $toUpdate) {
+                                & python -m pip install --upgrade $pkgName
+                                if ($LASTEXITCODE -eq 0) { $result.UpdatedPackages++ }
+                                else { $result.Errors.Add("Failed: $pkgName") }
                             }
                         }
-
-                        Write-Ok ('Python packages update pass completed; packages updated: ' + $result.UpdatedPackages)
                     }
                 }
             } else {
@@ -998,6 +990,36 @@ function Compare-VersionStrings {
     }
 }
 
+function Get-LatestAsusBiosInfo {
+    param([string]$BoardProduct)
+    if ($SkipWebLookup) { return $null }
+
+    # ASUS URLs usually follow a slug pattern based on the model name
+    # Example: https://www.asus.com/motherboards-components/motherboards/all-series/PRIME-B760M-A-WIFI/helpdesk_bios/
+    $slug = $BoardProduct -replace '\s+', '-'
+    return [pscustomobject]@{
+        SourceUrl     = "https://www.asus.com/search/results?searchType=support&searchKey=$($BoardProduct)&Tab=Drivers_And_Tools"
+        DirectLink    = "https://www.asus.com/motherboards-components/motherboards/all-series/$slug/helpdesk_bios/"
+        LatestVersion = $null # Parsing requires JS/Headless browser
+        Note          = "ASUS support pages require manual check due to dynamic content."
+    }
+}
+
+function Get-LatestMsiBiosInfo {
+    param([string]$BoardProduct)
+    if ($SkipWebLookup) { return $null }
+
+    # MSI URLs often use the product name directly
+    # Example: https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios
+    $slug = $BoardProduct -replace '\s+', '-'
+    return [pscustomobject]@{
+        SourceUrl     = "https://www.msi.com/search/$($BoardProduct)"
+        DirectLink    = "https://www.msi.com/Motherboard/$slug/support#bios"
+        LatestVersion = $null # Parsing requires JS/Headless browser
+        Note          = "MSI support pages require manual check due to dynamic content."
+    }
+}
+
 function Get-LatestASRockBiosInfo {
     param(
         [string]$BoardProduct,
@@ -1006,6 +1028,11 @@ function Get-LatestASRockBiosInfo {
 
     if ($BoardManufacturer -notmatch 'ASRock') { return $null }
     if ($SkipWebLookup) { return $null }
+
+    # Quick connectivity check
+    if (-not (Test-Connection -ComputerName www.asrock.com -Count 1 -Quiet)) {
+        return $null
+    }
 
     try {
         $url = 'https://www.asrock.com/support/index.asp?cat=BIOS'
@@ -1034,6 +1061,11 @@ function Get-LatestASRockBiosInfo {
 
 function Get-NvidiaLatestDriverVersion {
     if ($SkipWebLookup) { return $null }
+
+    # Quick connectivity check
+    if (-not (Test-Connection -ComputerName www.nvidia.com -Count 1 -Quiet)) {
+        return $null
+    }
 
     try {
         $driversPage = Invoke-WebRequest -Uri 'https://www.nvidia.com/en-us/drivers/' -UseBasicParsing -TimeoutSec 20
@@ -1101,22 +1133,38 @@ function Check-BIOS {
             return
         }
 
-        $latestBios = Get-LatestASRockBiosInfo -BoardProduct $baseBoard.Product -BoardManufacturer $baseBoard.Manufacturer
-        if ($latestBios) {
-            Write-Host ('  Latest online BIOS version: ' + $latestBios.LatestVersion) -ForegroundColor Gray
-            Write-Host ('  Latest online BIOS date: ' + $latestBios.LatestDate) -ForegroundColor Gray
-            Write-Host ('  Source: ' + $latestBios.SourceUrl) -ForegroundColor Gray
+        $latestBios = $null
+        if ($baseBoard.Manufacturer -match 'ASRock') {
+            $latestBios = Get-LatestASRockBiosInfo -BoardProduct $baseBoard.Product -BoardManufacturer $baseBoard.Manufacturer
+        } elseif ($baseBoard.Manufacturer -match 'ASUSTeK|ASUS') {
+            $latestBios = Get-LatestAsusBiosInfo -BoardProduct $baseBoard.Product
+        } elseif ($baseBoard.Manufacturer -match 'Micro-Star|MSI') {
+            $latestBios = Get-LatestMsiBiosInfo -BoardProduct $baseBoard.Product
+        }
 
-            $cmp = Compare-VersionStrings -A $bios.SMBIOSBIOSVersion -B $latestBios.LatestVersion
+        if ($latestBios) {
+            if ($latestBios.LatestVersion) {
+                Write-Host ('  Latest online BIOS version: ' + $latestBios.LatestVersion) -ForegroundColor Gray
+                if ($latestBios.LatestDate) { Write-Host ('  Latest online BIOS date: ' + $latestBios.LatestDate) -ForegroundColor Gray }
+            }
+            $displayLink = if ($latestBios.DirectLink) { $latestBios.DirectLink } else { $latestBios.SourceUrl }
+            Write-Host ('  Support Link: ' + $displayLink) -ForegroundColor Gray
+
+            $cmp = if ($latestBios.LatestVersion) { Compare-VersionStrings -A $bios.SMBIOSBIOSVersion -B $latestBios.LatestVersion } else { $null }
+
             if ($cmp -lt 0) {
                 Write-Warn ('BIOS update available: installed ' + $bios.SMBIOSBIOSVersion + ', latest ' + $latestBios.LatestVersion)
                 Add-SectionResult -Name 'BIOS Check' -Status 'Partial' -Details 'BIOS update appears available'
             } elseif ($cmp -eq 0) {
                 Write-Ok 'BIOS is up to date'
                 Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details 'Installed BIOS matches parsed latest version'
-            } else {
+            } elseif ($cmp -gt 0) {
                 Write-Ok 'Installed BIOS appears newer than parsed support-table value'
                 Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details 'Installed BIOS appears newer than parsed website result'
+            } else {
+                Write-ExpectedWarn "Automated version comparison not supported for $($baseBoard.Manufacturer)."
+                if ($latestBios.Note) { Write-Host ("  Note: " + $latestBios.Note) -ForegroundColor Gray }
+                Add-SectionResult -Name 'BIOS Check' -Status 'ExpectedLimit' -Details 'Manual check required (dynamic vendor site)'
             }
         } else {
             Write-ExpectedWarn 'Online BIOS lookup unavailable. This is often expected because vendor support pages change layout or block automation.'
