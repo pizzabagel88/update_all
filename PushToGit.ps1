@@ -17,8 +17,10 @@ try {
     if (-not (Test-Path ".git")) {
         Write-Host "Initializing Git repository..." -ForegroundColor Cyan
         git init
-        git branch -M main
     }
+
+    # Force the local branch to be named 'main'
+    git branch -M main
 
     Write-Host "Staging files..." -ForegroundColor Cyan
     git add .
