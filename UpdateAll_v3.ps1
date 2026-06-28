@@ -25,7 +25,6 @@ param(
     [switch]$SkipOllama,
     [switch]$SkipApt,
     [switch]$SkipPowerShellHelp,
-    [switch]$SkipScriptsData,
     [int]$LogRetentionDays = 30
 )
 
@@ -263,7 +262,7 @@ function Get-CommandVersion {
 }
 
 function Initialize-Capabilities {
-    Write-Section '[0/21] Preflight checks, capability map, and housekeeping...'
+    Write-Section '[0/20] Preflight checks, capability map, and housekeeping...'
 
     $script:Context.IsAdmin = Test-IsAdmin
     if ($script:Context.IsAdmin) {
@@ -310,7 +309,7 @@ function Initialize-Capabilities {
 function Export-InventorySnapshots {
     if (-not (Should-RunPhase 'Snapshots')) { return }
 
-    Write-Section '[1/21] Exporting inventory snapshots...'
+    Write-Section '[1/20] Exporting inventory snapshots...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Inventory export skipped.'
         Add-SectionResult -Name 'Inventory Snapshots' -Status 'Audit' -Details 'Would export machine inventory and versions'
@@ -402,7 +401,7 @@ function Export-InventorySnapshots {
 function Update-WingetPackages {
     if (-not (Should-RunPhase 'Packages')) { return }
 
-    Write-Section '[2/21] Updating WinGet sources and packages...'
+    Write-Section '[2/20] Updating WinGet sources and packages...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would run winget source update, self-update, and upgrade --all.'
         Add-SectionResult -Name 'WinGet Packages' -Status 'Audit' -Details 'Would update sources, App Installer, and all packages'
@@ -465,7 +464,7 @@ function Update-WingetPackages {
 function Update-PythonPackages {
     if (-not (Should-RunPhase 'Packages')) { return }
 
-    Write-Section '[3/21] Updating pip and Python packages...'
+    Write-Section '[3/20] Updating pip and Python packages...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would upgrade pip and inspect outdated Python packages.'
         Add-SectionResult -Name 'Python Packages' -Status 'Audit' -Details 'Would run pip upgrade and pip list --outdated'
@@ -588,7 +587,7 @@ function Update-PythonPackages {
 function Update-WindowsAndDrivers {
     if (-not (Should-RunPhase 'Windows') -or $SkipWindowsUpdate) { return }
 
-    Write-Section '[4/21] Updating Windows, Microsoft Update, and drivers...'
+    Write-Section '[4/20] Updating Windows, Microsoft Update, and drivers...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would install PSWindowsUpdate if needed and run Microsoft Update and driver passes.'
@@ -655,7 +654,7 @@ function Update-WindowsAndDrivers {
 function Update-CommonPackageManagers {
     if (-not (Should-RunPhase 'Packages')) { return }
 
-    Write-Section '[5/21] Updating Chocolatey, Scoop, npm, pnpm, and Yarn...'
+    Write-Section '[5/20] Updating Chocolatey, Scoop, npm, pnpm, and Yarn...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update detected package managers.'
@@ -717,7 +716,7 @@ function Update-CommonPackageManagers {
 function Update-DotNetAndRust {
     if (-not (Should-RunPhase 'Tools')) { return }
 
-    Write-Section '[6/21] Updating .NET and Rust tooling...'
+    Write-Section '[6/20] Updating .NET and Rust tooling...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would check for dotnet SDK before global tool updates and update Rust helpers if present.'
@@ -819,7 +818,7 @@ function Update-DotNetAndRust {
 function Update-AdditionalPythonTools {
     if (-not (Should-RunPhase 'Tools')) { return }
 
-    Write-Section '[7/21] Updating Poetry and uv if present...'
+    Write-Section '[7/20] Updating Poetry and uv if present...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would self-update Poetry and uv if present.'
@@ -860,7 +859,7 @@ function Update-AdditionalPythonTools {
 function Update-Steam {
     if (-not (Should-RunPhase 'Drivers') -or $SkipSteam) { return }
 
-    Write-Section '[8/21] Checking Steam...'
+    Write-Section '[8/20] Checking Steam...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would locate and launch Steam with -silent.'
@@ -897,7 +896,7 @@ function Update-Steam {
 function Update-VendorUtilities {
     if (-not (Should-RunPhase 'Drivers') -or $SkipVendorUtilities) { return }
 
-    Write-Section '[9/21] Launching vendor update utilities if installed...'
+    Write-Section '[9/20] Launching vendor update utilities if installed...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would detect and launch installed vendor utilities.'
@@ -1131,7 +1130,7 @@ function Get-IntelDriverInfo {
 function Check-BIOS {
     if (-not (Should-RunPhase 'Drivers')) { return }
 
-    Write-Section '[10/21] Checking motherboard firmware online...'
+    Write-Section '[10/20] Checking motherboard firmware online...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would read motherboard/BIOS info and perform web lookup if enabled.'
@@ -1202,7 +1201,7 @@ function Check-BIOS {
 function Check-GPUDrivers {
     if (-not (Should-RunPhase 'Drivers')) { return }
 
-    Write-Section '[11/21] Checking graphics driver versions online...'
+    Write-Section '[11/20] Checking graphics driver versions online...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would inspect local GPU and compare to online data if supported.'
@@ -1292,7 +1291,7 @@ function Check-GPUDrivers {
 function Update-MicrosoftStoreApps {
     if (-not (Should-RunPhase 'Core')) { return }
 
-    Write-Section '[12/21] Checking Microsoft Store source and app coverage...'
+    Write-Section '[12/20] Checking Microsoft Store source and app coverage...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would list winget sources.'
@@ -1322,7 +1321,7 @@ function Update-MicrosoftStoreApps {
 function Report-SystemState {
     if (-not (Should-RunPhase 'Core')) { return }
 
-    Write-Section '[13/21] Reporting current system state...'
+    Write-Section '[13/20] Reporting current system state...'
     try {
         $pending = Test-PendingReboot
         Write-Host ('  Pending reboot right now: ' + $pending.IsPending) -ForegroundColor Gray
@@ -1357,7 +1356,7 @@ function Report-SystemState {
 function Update-WSLDistros {
     if (-not (Should-RunPhase 'Packages') -or $SkipWSL) { return }
 
-    Write-Section '[14/21] Updating WSL distros...'
+    Write-Section '[14/20] Updating WSL distros...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update WSL distros.'
         Add-SectionResult -Name 'WSL Distros' -Status 'Audit' -Details 'Would update WSL distributions'
@@ -1370,9 +1369,9 @@ function Update-WSLDistros {
     $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
         try {
             Write-Host '  Checking for WSL distros...' -ForegroundColor Gray
-            $distros = & wsl --list --quiet 2>$null
+            $distros = & wsl --list --verbose 2>$null
             if ($LASTEXITCODE -eq 0 -and $distros) {
-                $distroList = @($distros | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                $distroList = @($distros | Where-Object { $_ -match '^\s*\*' -or $_ -notmatch '^\s*$' } | ForEach-Object { ($_ -split '\s+')[1] } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
                 if ($distroList.Count -gt 0) {
                     Write-Host "  Found $($distroList.Count) WSL distro(s)" -ForegroundColor Cyan
                     foreach ($distro in $distroList) {
@@ -1416,7 +1415,7 @@ function Update-WSLDistros {
 function Update-DefenderSignatures {
     if (-not (Should-RunPhase 'Core') -or $SkipDefender) { return }
 
-    Write-Section '[15/21] Updating Windows Defender signatures...'
+    Write-Section '[15/20] Updating Windows Defender signatures...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update Windows Defender signatures.'
         Add-SectionResult -Name 'Defender Signatures' -Status 'Audit' -Details 'Would update Windows Defender definitions'
@@ -1449,7 +1448,7 @@ function Update-DefenderSignatures {
 function Update-OllamaModels {
     if (-not (Should-RunPhase 'Tools') -or $SkipOllama) { return }
 
-    Write-Section '[16/21] Updating Ollama models...'
+    Write-Section '[16/20] Updating Ollama models...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update Ollama models.'
         Add-SectionResult -Name 'Ollama Models' -Status 'Audit' -Details 'Would update Ollama models'
@@ -1511,7 +1510,7 @@ function Update-OllamaModels {
 function Update-Apt {
     if (-not (Should-RunPhase 'Packages') -or $SkipApt) { return }
 
-    Write-Section '[17/21] Updating apt packages (WSL)...'
+    Write-Section '[17/20] Updating apt packages (WSL)...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update apt packages in WSL.'
         Add-SectionResult -Name 'Apt Packages' -Status 'Audit' -Details 'Would update apt packages'
@@ -1577,7 +1576,7 @@ function Update-Apt {
 function Update-PowerShellHelp {
     if (-not (Should-RunPhase 'Tools') -or $SkipPowerShellHelp) { return }
 
-    Write-Section '[18/21] Updating PowerShell help...'
+    Write-Section '[18/20] Updating PowerShell help...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update PowerShell help.'
         Add-SectionResult -Name 'PowerShell Help' -Status 'Audit' -Details 'Would update PowerShell help files'
@@ -1595,22 +1594,8 @@ function Update-PowerShellHelp {
     }
 }
 
-function Update-ScriptsData {
-    if (-not (Should-RunPhase 'Tools') -or $SkipScriptsData) { return }
-
-    Write-Section '[19/21] Updating scripts data...'
-    if ($AuditOnly) {
-        Write-Info 'AuditOnly enabled. Would update scripts data.'
-        Add-SectionResult -Name 'Scripts Data' -Status 'Audit' -Details 'Would update scripts data'
-        return
-    }
-
-    Write-Host '  Scripts data update not implemented (placeholder)' -ForegroundColor Gray
-    Add-SectionResult -Name 'Scripts Data' -Status 'Skipped' -Details 'Not implemented'
-}
-
 function Finish-Up {
-    Write-Section '[20/21] Final summary...'
+    Write-Section '[19/20] Final summary...'
 
     $script:Context.PendingRebootAtEnd = (Test-PendingReboot).IsPending
     $duration = New-TimeSpan -Start $script:StartTime -End (Get-Date)
@@ -1644,7 +1629,7 @@ function Finish-Up {
 }
 
 function Show-UsageHints {
-    Write-Section '[21/21] Usage hints...'
+    Write-Section '[20/20] Usage hints...'
     Write-Host '  Examples:' -ForegroundColor Gray
     Write-Host '    .\update.ps1' -ForegroundColor DarkGray
     Write-Host '    .\update.ps1 -Mode Fast' -ForegroundColor DarkGray
@@ -1676,7 +1661,6 @@ Update-DefenderSignatures
 Update-OllamaModels
 Update-Apt
 Update-PowerShellHelp
-Update-ScriptsData
 Report-SystemState
 Finish-Up
 Show-UsageHints

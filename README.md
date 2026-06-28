@@ -56,7 +56,6 @@ UpdateAll_v3.bat
 | `SkipOllama` | Switch | `false` | Skip Ollama model updates |
 | `SkipApt` | Switch | `false` | Skip apt package updates in WSL |
 | `SkipPowerShellHelp` | Switch | `false` | Skip PowerShell help updates |
-| `SkipScriptsData` | Switch | `false` | Skip scripts data updates |
 | `LogRetentionDays` | Int | `30` | Number of days to retain logs and snapshots |
 
 ## Modes
@@ -117,10 +116,10 @@ The script creates:
 - Added Ollama model updates
 - Added apt package updates in WSL
 - Added PowerShell help updates
-- Added scripts data updates (placeholder)
-- Added new skip parameters: SkipWSL, SkipDefender, SkipOllama, SkipApt, SkipPowerShellHelp, SkipScriptsData
-- Updated section numbering from 15 to 21 sections
+- Added new skip parameters: SkipWSL, SkipDefender, SkipOllama, SkipApt, SkipPowerShellHelp
+- Updated section numbering from 15 to 20 sections
 - Added wsl and ollama to capability detection
+- Fixed WSL distro parsing to use --list --verbose for better name extraction
 
 ### v3.1.1
 - Fixed leaked boolean output from helper calls
