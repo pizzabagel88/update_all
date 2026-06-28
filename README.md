@@ -1,4 +1,4 @@
-# System Update Script v3.1.1
+# System Update Script v3.2.0
 
 A comprehensive PowerShell script for updating Windows systems, package managers, and development tools.
 
@@ -20,6 +20,11 @@ Automatically updates:
 - **Steam** - Games and client
 - **Vendor Utilities** - Lenovo Vantage, Dell Update, etc.
 - **Microsoft Store** - Apps and coverage
+- **WSL** - WSL distro updates
+- **Windows Defender** - Signature updates
+- **Ollama** - AI model updates
+- **apt** - Package updates in WSL
+- **PowerShell Help** - Help file updates
 
 ## Usage
 
@@ -46,6 +51,12 @@ UpdateAll_v3.bat
 | `SkipWebLookup` | Switch | `false` | Skip web-based version lookups |
 | `SkipWingetExport` | Switch | `false` | Skip winget package export to snapshot |
 | `SkipInventory` | Switch | `false` | Skip machine inventory snapshot |
+| `SkipWSL` | Switch | `false` | Skip WSL distro updates |
+| `SkipDefender` | Switch | `false` | Skip Windows Defender signature updates |
+| `SkipOllama` | Switch | `false` | Skip Ollama model updates |
+| `SkipApt` | Switch | `false` | Skip apt package updates in WSL |
+| `SkipPowerShellHelp` | Switch | `false` | Skip PowerShell help updates |
+| `SkipScriptsData` | Switch | `false` | Skip scripts data updates |
 | `LogRetentionDays` | Int | `30` | Number of days to retain logs and snapshots |
 
 ## Modes
@@ -99,6 +110,17 @@ The script creates:
 - WinGet updates now show progress indicators listing packages being upgraded
 
 ## Version History
+
+### v3.2.0
+- Added WSL distro updates
+- Added Windows Defender signature updates
+- Added Ollama model updates
+- Added apt package updates in WSL
+- Added PowerShell help updates
+- Added scripts data updates (placeholder)
+- Added new skip parameters: SkipWSL, SkipDefender, SkipOllama, SkipApt, SkipPowerShellHelp, SkipScriptsData
+- Updated section numbering from 15 to 21 sections
+- Added wsl and ollama to capability detection
 
 ### v3.1.1
 - Fixed leaked boolean output from helper calls

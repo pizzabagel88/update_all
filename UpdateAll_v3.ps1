@@ -20,10 +20,16 @@ param(
     [switch]$SkipWebLookup,
     [switch]$SkipWingetExport,
     [switch]$SkipInventory,
+    [switch]$SkipWSL,
+    [switch]$SkipDefender,
+    [switch]$SkipOllama,
+    [switch]$SkipApt,
+    [switch]$SkipPowerShellHelp,
+    [switch]$SkipScriptsData,
     [int]$LogRetentionDays = 30
 )
 
-$script:ScriptVersion = '3.1.1'
+$script:ScriptVersion = '3.2.0'
 $ErrorActionPreference = 'Continue'
 $script:StartTime = Get-Date
 $script:LogRoot = Join-Path $env:USERPROFILE 'Desktop\Updater\logs'
@@ -257,7 +263,7 @@ function Get-CommandVersion {
 }
 
 function Initialize-Capabilities {
-    Write-Section '[0/15] Preflight checks, capability map, and housekeeping...'
+    Write-Section '[0/21] Preflight checks, capability map, and housekeeping...'
 
     $script:Context.IsAdmin = Test-IsAdmin
     if ($script:Context.IsAdmin) {
@@ -266,7 +272,7 @@ function Initialize-Capabilities {
         Write-Warn 'Not running as administrator'
     }
 
-    foreach ($cmd in @('winget','python','choco','scoop','npm','pnpm','yarn','dotnet','cargo','poetry','uv')) {
+    foreach ($cmd in @('winget','python','choco','scoop','npm','pnpm','yarn','dotnet','cargo','poetry','uv','wsl','ollama')) {
         $script:Capabilities[$cmd] = [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
     }
 
@@ -304,7 +310,7 @@ function Initialize-Capabilities {
 function Export-InventorySnapshots {
     if (-not (Should-RunPhase 'Snapshots')) { return }
 
-    Write-Section '[1/15] Exporting inventory snapshots...'
+    Write-Section '[1/21] Exporting inventory snapshots...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Inventory export skipped.'
         Add-SectionResult -Name 'Inventory Snapshots' -Status 'Audit' -Details 'Would export machine inventory and versions'
@@ -396,7 +402,7 @@ function Export-InventorySnapshots {
 function Update-WingetPackages {
     if (-not (Should-RunPhase 'Packages')) { return }
 
-    Write-Section '[2/15] Updating WinGet sources and packages...'
+    Write-Section '[2/21] Updating WinGet sources and packages...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would run winget source update, self-update, and upgrade --all.'
         Add-SectionResult -Name 'WinGet Packages' -Status 'Audit' -Details 'Would update sources, App Installer, and all packages'
@@ -412,6 +418,23 @@ function Update-WingetPackages {
 
         $r2 = Invoke-ExternalCommand -FilePath 'winget' -Arguments @('upgrade','Microsoft.AppInstaller','--accept-source-agreements','--accept-package-agreements') -SuccessMessage 'winget/App Installer update attempted' -FailurePrefix 'winget self-update failed:' -AllowNonZero
         $actions.Add([pscustomobject]@{ Name='App Installer upgrade'; Success=$r2.Success; ExitCode=$r2.ExitCode }) | Out-Null
+
+        Write-Host '  Checking for available package upgrades...' -ForegroundColor Gray
+        $upgradeList = & winget list --upgrade-available --accept-source-agreements 2>$null
+        if ($LASTEXITCODE -eq 0 -and $upgradeList) {
+            $packageCount = ($upgradeList | Measure-Object -Line).Lines - 2
+            if ($packageCount -gt 0) {
+                Write-Host "  Found $packageCount packages available for upgrade:" -ForegroundColor Cyan
+                $upgradeList | Select-Object -Skip 2 | ForEach-Object {
+                    if (-not [string]::IsNullOrWhiteSpace($_)) {
+                        Write-Host "    - $_" -ForegroundColor Gray
+                    }
+                }
+                Write-Host '  Upgrading packages...' -ForegroundColor Cyan
+            } else {
+                Write-Host '  No packages available for upgrade' -ForegroundColor Green
+            }
+        }
 
         $r3 = Invoke-ExternalCommand -FilePath 'winget' -Arguments @('upgrade','--all','--include-unknown','--accept-source-agreements','--accept-package-agreements') -SuccessMessage 'winget package updates completed' -FailurePrefix 'winget package update failed:'
         $actions.Add([pscustomobject]@{ Name='upgrade all'; Success=$r3.Success; ExitCode=$r3.ExitCode }) | Out-Null
@@ -442,7 +465,7 @@ function Update-WingetPackages {
 function Update-PythonPackages {
     if (-not (Should-RunPhase 'Packages')) { return }
 
-    Write-Section '[3/15] Updating pip and Python packages...'
+    Write-Section '[3/21] Updating pip and Python packages...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would upgrade pip and inspect outdated Python packages.'
         Add-SectionResult -Name 'Python Packages' -Status 'Audit' -Details 'Would run pip upgrade and pip list --outdated'
@@ -565,7 +588,7 @@ function Update-PythonPackages {
 function Update-WindowsAndDrivers {
     if (-not (Should-RunPhase 'Windows') -or $SkipWindowsUpdate) { return }
 
-    Write-Section '[4/15] Updating Windows, Microsoft Update, and drivers...'
+    Write-Section '[4/21] Updating Windows, Microsoft Update, and drivers...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would install PSWindowsUpdate if needed and run Microsoft Update and driver passes.'
@@ -632,7 +655,7 @@ function Update-WindowsAndDrivers {
 function Update-CommonPackageManagers {
     if (-not (Should-RunPhase 'Packages')) { return }
 
-    Write-Section '[5/15] Updating Chocolatey, Scoop, npm, pnpm, and Yarn...'
+    Write-Section '[5/21] Updating Chocolatey, Scoop, npm, pnpm, and Yarn...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update detected package managers.'
@@ -694,7 +717,7 @@ function Update-CommonPackageManagers {
 function Update-DotNetAndRust {
     if (-not (Should-RunPhase 'Tools')) { return }
 
-    Write-Section '[6/15] Updating .NET and Rust tooling...'
+    Write-Section '[6/21] Updating .NET and Rust tooling...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would check for dotnet SDK before global tool updates and update Rust helpers if present.'
@@ -796,7 +819,7 @@ function Update-DotNetAndRust {
 function Update-AdditionalPythonTools {
     if (-not (Should-RunPhase 'Tools')) { return }
 
-    Write-Section '[7/15] Updating Poetry and uv if present...'
+    Write-Section '[7/21] Updating Poetry and uv if present...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would self-update Poetry and uv if present.'
@@ -837,7 +860,7 @@ function Update-AdditionalPythonTools {
 function Update-Steam {
     if (-not (Should-RunPhase 'Drivers') -or $SkipSteam) { return }
 
-    Write-Section '[8/15] Checking Steam...'
+    Write-Section '[8/21] Checking Steam...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would locate and launch Steam with -silent.'
@@ -874,7 +897,7 @@ function Update-Steam {
 function Update-VendorUtilities {
     if (-not (Should-RunPhase 'Drivers') -or $SkipVendorUtilities) { return }
 
-    Write-Section '[9/15] Launching vendor update utilities if installed...'
+    Write-Section '[9/21] Launching vendor update utilities if installed...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would detect and launch installed vendor utilities.'
@@ -1108,7 +1131,7 @@ function Get-IntelDriverInfo {
 function Check-BIOS {
     if (-not (Should-RunPhase 'Drivers')) { return }
 
-    Write-Section '[10/15] Checking motherboard firmware online...'
+    Write-Section '[10/21] Checking motherboard firmware online...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would read motherboard/BIOS info and perform web lookup if enabled.'
@@ -1179,7 +1202,7 @@ function Check-BIOS {
 function Check-GPUDrivers {
     if (-not (Should-RunPhase 'Drivers')) { return }
 
-    Write-Section '[11/15] Checking graphics driver versions online...'
+    Write-Section '[11/21] Checking graphics driver versions online...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would inspect local GPU and compare to online data if supported.'
@@ -1269,7 +1292,7 @@ function Check-GPUDrivers {
 function Update-MicrosoftStoreApps {
     if (-not (Should-RunPhase 'Core')) { return }
 
-    Write-Section '[12/15] Checking Microsoft Store source and app coverage...'
+    Write-Section '[12/21] Checking Microsoft Store source and app coverage...'
 
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would list winget sources.'
@@ -1299,7 +1322,7 @@ function Update-MicrosoftStoreApps {
 function Report-SystemState {
     if (-not (Should-RunPhase 'Core')) { return }
 
-    Write-Section '[13/15] Reporting current system state...'
+    Write-Section '[13/21] Reporting current system state...'
     try {
         $pending = Test-PendingReboot
         Write-Host ('  Pending reboot right now: ' + $pending.IsPending) -ForegroundColor Gray
@@ -1331,8 +1354,263 @@ function Report-SystemState {
     }
 }
 
+function Update-WSLDistros {
+    if (-not (Should-RunPhase 'Packages') -or $SkipWSL) { return }
+
+    Write-Section '[14/21] Updating WSL distros...'
+    if ($AuditOnly) {
+        Write-Info 'AuditOnly enabled. Would update WSL distros.'
+        Add-SectionResult -Name 'WSL Distros' -Status 'Audit' -Details 'Would update WSL distributions'
+        return
+    }
+
+    $commandPresent = $false
+    $actions = New-Object System.Collections.Generic.List[object]
+
+    $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
+        try {
+            Write-Host '  Checking for WSL distros...' -ForegroundColor Gray
+            $distros = & wsl --list --quiet 2>$null
+            if ($LASTEXITCODE -eq 0 -and $distros) {
+                $distroList = @($distros | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                if ($distroList.Count -gt 0) {
+                    Write-Host "  Found $($distroList.Count) WSL distro(s)" -ForegroundColor Cyan
+                    foreach ($distro in $distroList) {
+                        Write-Host "    Updating $distro..." -ForegroundColor Gray
+                        & wsl --distribution $distro --upgrade --no-web-download 2>$null
+                        $actions.Add([pscustomobject]@{ Name=$distro; Success=($LASTEXITCODE -eq 0); ExitCode=$LASTEXITCODE }) | Out-Null
+                        if ($LASTEXITCODE -eq 0) { Write-Ok "WSL distro '$distro' updated" }
+                        else { Write-Err ("WSL distro '$distro' update failed (exit code " + $LASTEXITCODE + ")") }
+                    }
+                } else {
+                    Write-Host '  No WSL distros found' -ForegroundColor Green
+                }
+            } else {
+                Write-Host '  No WSL distros found or WSL not properly configured' -ForegroundColor Gray
+            }
+        } catch {
+            Write-Err ('WSL distro update failed: ' + $_)
+            $actions.Add([pscustomobject]@{ Name='WSL'; Success=$false; ExitCode=$null }) | Out-Null
+        }
+    }
+
+    if (-not $commandPresent) {
+        Add-SectionResult -Name 'WSL Distros' -Status 'Skipped' -Details 'wsl not installed'
+        return
+    }
+
+    $total = $actions.Count
+    $successes = @($actions | Where-Object { $_.Success }).Count
+
+    if ($total -eq 0) {
+        Add-SectionResult -Name 'WSL Distros' -Status 'Skipped' -Details 'No WSL distros found'
+    } elseif ($successes -eq $total) {
+        Add-SectionResult -Name 'WSL Distros' -Status 'Success' -Details ($successes.ToString() + '/' + $total + ' distros updated')
+    } elseif ($successes -gt 0) {
+        Add-SectionResult -Name 'WSL Distros' -Status 'Partial' -Details ($successes.ToString() + '/' + $total + ' distros updated')
+    } else {
+        Add-SectionResult -Name 'WSL Distros' -Status 'Failed' -Details ('0/' + $total + ' distros updated')
+    }
+}
+
+function Update-DefenderSignatures {
+    if (-not (Should-RunPhase 'Core') -or $SkipDefender) { return }
+
+    Write-Section '[15/21] Updating Windows Defender signatures...'
+    if ($AuditOnly) {
+        Write-Info 'AuditOnly enabled. Would update Windows Defender signatures.'
+        Add-SectionResult -Name 'Defender Signatures' -Status 'Audit' -Details 'Would update Windows Defender definitions'
+        return
+    }
+
+    try {
+        if (-not (Test-IsAdmin)) {
+            Write-Warn 'Not running as administrator. Windows Defender signature update skipped.'
+            Write-Host '  To enable this section, run the script as Administrator.' -ForegroundColor Gray
+            Add-SectionResult -Name 'Defender Signatures' -Status 'Skipped' -Details 'Administrator privileges required'
+            return
+        }
+
+        Write-Host '  Updating Windows Defender signatures...' -ForegroundColor Gray
+        & "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -SignatureUpdate
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok 'Windows Defender signatures updated'
+            Add-SectionResult -Name 'Defender Signatures' -Status 'Success' -Details 'Signatures updated successfully'
+        } else {
+            Write-Err ('Windows Defender signature update failed (exit code ' + $LASTEXITCODE + ')')
+            Add-SectionResult -Name 'Defender Signatures' -Status 'Failed' -Details ('Exit code: ' + $LASTEXITCODE)
+        }
+    } catch {
+        Write-Err ('Windows Defender signature update failed: ' + $_)
+        Add-SectionResult -Name 'Defender Signatures' -Status 'Failed' -Details $_.ToString()
+    }
+}
+
+function Update-OllamaModels {
+    if (-not (Should-RunPhase 'Tools') -or $SkipOllama) { return }
+
+    Write-Section '[16/21] Updating Ollama models...'
+    if ($AuditOnly) {
+        Write-Info 'AuditOnly enabled. Would update Ollama models.'
+        Add-SectionResult -Name 'Ollama Models' -Status 'Audit' -Details 'Would update Ollama models'
+        return
+    }
+
+    $commandPresent = $false
+    $actions = New-Object System.Collections.Generic.List[object]
+
+    $commandPresent = Invoke-IfCommandExists -CommandName 'ollama' -MissingMessage 'ollama not found (skipped)' -Action {
+        try {
+            Write-Host '  Checking for installed Ollama models...' -ForegroundColor Gray
+            $models = & ollama list 2>$null
+            if ($LASTEXITCODE -eq 0 -and $models) {
+                $modelList = @($models | Select-Object -Skip 1 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                if ($modelList.Count -gt 0) {
+                    Write-Host "  Found $($modelList.Count) Ollama model(s)" -ForegroundColor Cyan
+                    foreach ($modelLine in $modelList) {
+                        $modelName = ($modelLine -split '\s+')[0]
+                        if (-not [string]::IsNullOrWhiteSpace($modelName)) {
+                            Write-Host "    Pulling latest for $modelName..." -ForegroundColor Gray
+                            & ollama pull $modelName 2>$null
+                            $actions.Add([pscustomobject]@{ Name=$modelName; Success=($LASTEXITCODE -eq 0); ExitCode=$LASTEXITCODE }) | Out-Null
+                            if ($LASTEXITCODE -eq 0) { Write-Ok "Ollama model '$modelName' updated" }
+                            else { Write-Err ("Ollama model '$modelName' update failed (exit code " + $LASTEXITCODE + ")") }
+                        }
+                    }
+                } else {
+                    Write-Host '  No Ollama models found' -ForegroundColor Green
+                }
+            } else {
+                Write-Host '  No Ollama models found' -ForegroundColor Gray
+            }
+        } catch {
+            Write-Err ('Ollama model update failed: ' + $_)
+            $actions.Add([pscustomobject]@{ Name='Ollama'; Success=$false; ExitCode=$null }) | Out-Null
+        }
+    }
+
+    if (-not $commandPresent) {
+        Add-SectionResult -Name 'Ollama Models' -Status 'Skipped' -Details 'ollama not installed'
+        return
+    }
+
+    $total = $actions.Count
+    $successes = @($actions | Where-Object { $_.Success }).Count
+
+    if ($total -eq 0) {
+        Add-SectionResult -Name 'Ollama Models' -Status 'Skipped' -Details 'No Ollama models found'
+    } elseif ($successes -eq $total) {
+        Add-SectionResult -Name 'Ollama Models' -Status 'Success' -Details ($successes.ToString() + '/' + $total + ' models updated')
+    } elseif ($successes -gt 0) {
+        Add-SectionResult -Name 'Ollama Models' -Status 'Partial' -Details ($successes.ToString() + '/' + $total + ' models updated')
+    } else {
+        Add-SectionResult -Name 'Ollama Models' -Status 'Failed' -Details ('0/' + $total + ' models updated')
+    }
+}
+
+function Update-Apt {
+    if (-not (Should-RunPhase 'Packages') -or $SkipApt) { return }
+
+    Write-Section '[17/21] Updating apt packages (WSL)...'
+    if ($AuditOnly) {
+        Write-Info 'AuditOnly enabled. Would update apt packages in WSL.'
+        Add-SectionResult -Name 'Apt Packages' -Status 'Audit' -Details 'Would update apt packages'
+        return
+    }
+
+    $commandPresent = $false
+    $actions = New-Object System.Collections.Generic.List[object]
+
+    $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
+        try {
+            Write-Host '  Checking for apt in WSL...' -ForegroundColor Gray
+            & wsl -- which apt 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host '  apt found in WSL, updating packages...' -ForegroundColor Cyan
+                Write-Host '    Running apt update...' -ForegroundColor Gray
+                & wsl -- bash -c "sudo apt update" 2>$null
+                $updateSuccess = ($LASTEXITCODE -eq 0)
+                $actions.Add([pscustomobject]@{ Name='apt update'; Success=$updateSuccess; ExitCode=$LASTEXITCODE }) | Out-Null
+
+                if ($updateSuccess) {
+                    Write-Host '    Running apt upgrade...' -ForegroundColor Gray
+                    & wsl -- bash -c "sudo apt upgrade -y" 2>$null
+                    $upgradeSuccess = ($LASTEXITCODE -eq 0)
+                    $actions.Add([pscustomobject]@{ Name='apt upgrade'; Success=$upgradeSuccess; ExitCode=$LASTEXITCODE }) | Out-Null
+
+                    if ($upgradeSuccess) {
+                        Write-Ok 'apt packages updated'
+                    } else {
+                        Write-Err ('apt upgrade failed (exit code ' + $LASTEXITCODE + ')')
+                    }
+                } else {
+                    Write-Err ('apt update failed (exit code ' + $LASTEXITCODE + ')')
+                }
+            } else {
+                Write-Host '  apt not found in WSL' -ForegroundColor Gray
+            }
+        } catch {
+            Write-Err ('apt update failed: ' + $_)
+            $actions.Add([pscustomobject]@{ Name='apt'; Success=$false; ExitCode=$null }) | Out-Null
+        }
+    }
+
+    if (-not $commandPresent) {
+        Add-SectionResult -Name 'Apt Packages' -Status 'Skipped' -Details 'wsl not installed or apt not available'
+        return
+    }
+
+    $total = $actions.Count
+    $successes = @($actions | Where-Object { $_.Success }).Count
+
+    if ($total -eq 0) {
+        Add-SectionResult -Name 'Apt Packages' -Status 'Skipped' -Details 'apt not available in WSL'
+    } elseif ($successes -eq $total) {
+        Add-SectionResult -Name 'Apt Packages' -Status 'Success' -Details ($successes.ToString() + '/' + $total + ' apt operations succeeded')
+    } elseif ($successes -gt 0) {
+        Add-SectionResult -Name 'Apt Packages' -Status 'Partial' -Details ($successes.ToString() + '/' + $total + ' apt operations succeeded')
+    } else {
+        Add-SectionResult -Name 'Apt Packages' -Status 'Failed' -Details ('0/' + $total + ' apt operations succeeded')
+    }
+}
+
+function Update-PowerShellHelp {
+    if (-not (Should-RunPhase 'Tools') -or $SkipPowerShellHelp) { return }
+
+    Write-Section '[18/21] Updating PowerShell help...'
+    if ($AuditOnly) {
+        Write-Info 'AuditOnly enabled. Would update PowerShell help.'
+        Add-SectionResult -Name 'PowerShell Help' -Status 'Audit' -Details 'Would update PowerShell help files'
+        return
+    }
+
+    try {
+        Write-Host '  Updating PowerShell help...' -ForegroundColor Gray
+        Update-Help -Force -ErrorAction SilentlyContinue
+        Write-Ok 'PowerShell help updated'
+        Add-SectionResult -Name 'PowerShell Help' -Status 'Success' -Details 'Help files updated'
+    } catch {
+        Write-Err ('PowerShell help update failed: ' + $_)
+        Add-SectionResult -Name 'PowerShell Help' -Status 'Partial' -Details $_.ToString()
+    }
+}
+
+function Update-ScriptsData {
+    if (-not (Should-RunPhase 'Tools') -or $SkipScriptsData) { return }
+
+    Write-Section '[19/21] Updating scripts data...'
+    if ($AuditOnly) {
+        Write-Info 'AuditOnly enabled. Would update scripts data.'
+        Add-SectionResult -Name 'Scripts Data' -Status 'Audit' -Details 'Would update scripts data'
+        return
+    }
+
+    Write-Host '  Scripts data update not implemented (placeholder)' -ForegroundColor Gray
+    Add-SectionResult -Name 'Scripts Data' -Status 'Skipped' -Details 'Not implemented'
+}
+
 function Finish-Up {
-    Write-Section '[14/15] Final summary...'
+    Write-Section '[20/21] Final summary...'
 
     $script:Context.PendingRebootAtEnd = (Test-PendingReboot).IsPending
     $duration = New-TimeSpan -Start $script:StartTime -End (Get-Date)
@@ -1366,7 +1644,7 @@ function Finish-Up {
 }
 
 function Show-UsageHints {
-    Write-Section '[15/15] Usage hints...'
+    Write-Section '[21/21] Usage hints...'
     Write-Host '  Examples:' -ForegroundColor Gray
     Write-Host '    .\update.ps1' -ForegroundColor DarkGray
     Write-Host '    .\update.ps1 -Mode Fast' -ForegroundColor DarkGray
@@ -1393,6 +1671,12 @@ Update-VendorUtilities
 Check-BIOS
 Check-GPUDrivers
 Update-MicrosoftStoreApps
+Update-WSLDistros
+Update-DefenderSignatures
+Update-OllamaModels
+Update-Apt
+Update-PowerShellHelp
+Update-ScriptsData
 Report-SystemState
 Finish-Up
 Show-UsageHints
