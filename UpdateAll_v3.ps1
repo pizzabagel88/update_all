@@ -1368,9 +1368,9 @@ function Update-WSLDistros {
     $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
         try {
             Write-Host '  Checking for WSL distros...' -ForegroundColor Gray
-            $distros = & wsl --list 2>$null
+            $distros = & wsl --list --quiet 2>$null
             if ($LASTEXITCODE -eq 0 -and $distros) {
-                $distroList = @($distros | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { ($_ -split '\s+')[0].Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                $distroList = @($distros | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
                 if ($distroList.Count -gt 0) {
                     Write-Host "  Found $($distroList.Count) WSL distro(s)" -ForegroundColor Cyan
                     foreach ($distro in $distroList) {
