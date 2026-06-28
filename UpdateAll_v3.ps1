@@ -1370,7 +1370,7 @@ function Update-WSLDistros {
             Write-Host '  Checking for WSL distros...' -ForegroundColor Gray
             $distros = & wsl --list --quiet 2>$null
             if ($LASTEXITCODE -eq 0 -and $distros) {
-                $distroList = @($distros | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                $distroList = @($distros | ForEach-Object { $_ -replace "`0", "" } | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
                 if ($distroList.Count -gt 0) {
                     Write-Host "  Found $($distroList.Count) WSL distro(s)" -ForegroundColor Cyan
                     foreach ($distro in $distroList) {
