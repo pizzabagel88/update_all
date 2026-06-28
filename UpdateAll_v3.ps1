@@ -421,13 +421,12 @@ function Update-WingetPackages {
         Write-Host '  Checking for available package upgrades...' -ForegroundColor Gray
         $upgradeList = & winget list --upgrade-available --accept-source-agreements 2>$null
         if ($LASTEXITCODE -eq 0 -and $upgradeList) {
-            $packageCount = ($upgradeList | Measure-Object -Line).Lines - 2
+            $packageLines = @($upgradeList | Select-Object -Skip 2 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            $packageCount = $packageLines.Count
             if ($packageCount -gt 0) {
                 Write-Host "  Found $packageCount packages available for upgrade:" -ForegroundColor Cyan
-                $upgradeList | Select-Object -Skip 2 | ForEach-Object {
-                    if (-not [string]::IsNullOrWhiteSpace($_)) {
-                        Write-Host "    - $_" -ForegroundColor Gray
-                    }
+                foreach ($line in $packageLines) {
+                    Write-Host "    - $line" -ForegroundColor Gray
                 }
                 Write-Host '  Upgrading packages...' -ForegroundColor Cyan
             } else {
@@ -1369,9 +1368,9 @@ function Update-WSLDistros {
     $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
         try {
             Write-Host '  Checking for WSL distros...' -ForegroundColor Gray
-            $distros = & wsl --list --verbose 2>$null
+            $distros = & wsl --list 2>$null
             if ($LASTEXITCODE -eq 0 -and $distros) {
-                $distroList = @($distros | Where-Object { $_ -match '^\s*\*' -or $_ -notmatch '^\s*$' } | ForEach-Object { ($_ -split '\s+')[1] } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                $distroList = @($distros | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { ($_ -split '\s+')[0].Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
                 if ($distroList.Count -gt 0) {
                     Write-Host "  Found $($distroList.Count) WSL distro(s)" -ForegroundColor Cyan
                     foreach ($distro in $distroList) {
@@ -1523,30 +1522,40 @@ function Update-Apt {
     $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
         try {
             Write-Host '  Checking for apt in WSL...' -ForegroundColor Gray
-            & wsl -- which apt 2>$null | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host '  apt found in WSL, updating packages...' -ForegroundColor Cyan
-                Write-Host '    Running apt update...' -ForegroundColor Gray
-                & wsl -- bash -c "sudo apt update" 2>$null
-                $updateSuccess = ($LASTEXITCODE -eq 0)
-                $actions.Add([pscustomobject]@{ Name='apt update'; Success=$updateSuccess; ExitCode=$LASTEXITCODE }) | Out-Null
+            $distros = & wsl --list 2>$null
+            $aptFound = $false
+            if ($LASTEXITCODE -eq 0 -and $distros) {
+                $distroList = @($distros | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { ($_ -split '\s+')[0].Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                foreach ($distro in $distroList) {
+                    & wsl --distribution $distro -- which apt 2>$null | Out-Null
+                    if ($LASTEXITCODE -eq 0) {
+                        $aptFound = $true
+                        Write-Host "  apt found in WSL distro '$distro', updating packages..." -ForegroundColor Cyan
+                        Write-Host '    Running apt update...' -ForegroundColor Gray
+                        & wsl --distribution $distro -- bash -c "sudo apt update" 2>$null
+                        $updateSuccess = ($LASTEXITCODE -eq 0)
+                        $actions.Add([pscustomobject]@{ Name='apt update'; Success=$updateSuccess; ExitCode=$LASTEXITCODE }) | Out-Null
 
-                if ($updateSuccess) {
-                    Write-Host '    Running apt upgrade...' -ForegroundColor Gray
-                    & wsl -- bash -c "sudo apt upgrade -y" 2>$null
-                    $upgradeSuccess = ($LASTEXITCODE -eq 0)
-                    $actions.Add([pscustomobject]@{ Name='apt upgrade'; Success=$upgradeSuccess; ExitCode=$LASTEXITCODE }) | Out-Null
+                        if ($updateSuccess) {
+                            Write-Host '    Running apt upgrade...' -ForegroundColor Gray
+                            & wsl --distribution $distro -- bash -c "sudo apt upgrade -y" 2>$null
+                            $upgradeSuccess = ($LASTEXITCODE -eq 0)
+                            $actions.Add([pscustomobject]@{ Name='apt upgrade'; Success=$upgradeSuccess; ExitCode=$LASTEXITCODE }) | Out-Null
 
-                    if ($upgradeSuccess) {
-                        Write-Ok 'apt packages updated'
-                    } else {
-                        Write-Err ('apt upgrade failed (exit code ' + $LASTEXITCODE + ')')
+                            if ($upgradeSuccess) {
+                                Write-Ok 'apt packages updated'
+                            } else {
+                                Write-Err ('apt upgrade failed (exit code ' + $LASTEXITCODE + ')')
+                            }
+                        } else {
+                            Write-Err ('apt update failed (exit code ' + $LASTEXITCODE + ')')
+                        }
+                        break
                     }
-                } else {
-                    Write-Err ('apt update failed (exit code ' + $LASTEXITCODE + ')')
                 }
-            } else {
-                Write-Host '  apt not found in WSL' -ForegroundColor Gray
+            }
+            if (-not $aptFound) {
+                Write-Host '  apt not found in any WSL distro' -ForegroundColor Gray
             }
         } catch {
             Write-Err ('apt update failed: ' + $_)
