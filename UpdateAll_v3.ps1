@@ -1355,10 +1355,10 @@ function Report-SystemState {
 function Update-WSLDistros {
     if (-not (Should-RunPhase 'Packages') -or $SkipWSL) { return }
 
-    Write-Section '[14/20] Updating WSL distros...'
+    Write-Section '[14/20] Updating WSL components...'
     if ($AuditOnly) {
-        Write-Info 'AuditOnly enabled. Would update WSL distros.'
-        Add-SectionResult -Name 'WSL Distros' -Status 'Audit' -Details 'Would update WSL distributions'
+        Write-Info 'AuditOnly enabled. Would update WSL components.'
+        Add-SectionResult -Name 'WSL Components' -Status 'Audit' -Details 'Would update WSL'
         return
     }
 
@@ -1367,33 +1367,19 @@ function Update-WSLDistros {
 
     $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
         try {
-            Write-Host '  Checking for WSL distros...' -ForegroundColor Gray
-            $distros = & wsl --list --quiet 2>$null
-            if ($LASTEXITCODE -eq 0 -and $distros) {
-                $distroList = @($distros | ForEach-Object { $_ -replace "`0", "" } | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-                if ($distroList.Count -gt 0) {
-                    Write-Host "  Found $($distroList.Count) WSL distro(s)" -ForegroundColor Cyan
-                    foreach ($distro in $distroList) {
-                        Write-Host "    Updating $distro..." -ForegroundColor Gray
-                        & wsl --distribution $distro --upgrade --no-web-download 2>$null
-                        $actions.Add([pscustomobject]@{ Name=$distro; Success=($LASTEXITCODE -eq 0); ExitCode=$LASTEXITCODE }) | Out-Null
-                        if ($LASTEXITCODE -eq 0) { Write-Ok "WSL distro '$distro' updated" }
-                        else { Write-Err ("WSL distro '$distro' update failed (exit code " + $LASTEXITCODE + ")") }
-                    }
-                } else {
-                    Write-Host '  No WSL distros found' -ForegroundColor Green
-                }
-            } else {
-                Write-Host '  No WSL distros found or WSL not properly configured' -ForegroundColor Gray
-            }
+            Write-Host '  Updating WSL components...' -ForegroundColor Gray
+            & wsl --update 2>$null
+            $actions.Add([pscustomobject]@{ Name='WSL update'; Success=($LASTEXITCODE -eq 0); ExitCode=$LASTEXITCODE }) | Out-Null
+            if ($LASTEXITCODE -eq 0) { Write-Ok 'WSL components updated' }
+            else { Write-Err ('WSL update failed (exit code ' + $LASTEXITCODE + ')') }
         } catch {
-            Write-Err ('WSL distro update failed: ' + $_)
+            Write-Err ('WSL update failed: ' + $_)
             $actions.Add([pscustomobject]@{ Name='WSL'; Success=$false; ExitCode=$null }) | Out-Null
         }
     }
 
     if (-not $commandPresent) {
-        Add-SectionResult -Name 'WSL Distros' -Status 'Skipped' -Details 'wsl not installed'
+        Add-SectionResult -Name 'WSL Components' -Status 'Skipped' -Details 'wsl not installed'
         return
     }
 
@@ -1401,13 +1387,11 @@ function Update-WSLDistros {
     $successes = @($actions | Where-Object { $_.Success }).Count
 
     if ($total -eq 0) {
-        Add-SectionResult -Name 'WSL Distros' -Status 'Skipped' -Details 'No WSL distros found'
+        Add-SectionResult -Name 'WSL Components' -Status 'Skipped' -Details 'No WSL actions performed'
     } elseif ($successes -eq $total) {
-        Add-SectionResult -Name 'WSL Distros' -Status 'Success' -Details ($successes.ToString() + '/' + $total + ' distros updated')
-    } elseif ($successes -gt 0) {
-        Add-SectionResult -Name 'WSL Distros' -Status 'Partial' -Details ($successes.ToString() + '/' + $total + ' distros updated')
+        Add-SectionResult -Name 'WSL Components' -Status 'Success' -Details 'WSL components updated successfully'
     } else {
-        Add-SectionResult -Name 'WSL Distros' -Status 'Failed' -Details ('0/' + $total + ' distros updated')
+        Add-SectionResult -Name 'WSL Components' -Status 'Failed' -Details 'WSL update failed'
     }
 }
 

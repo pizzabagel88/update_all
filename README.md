@@ -20,7 +20,7 @@ Automatically updates:
 - **Steam** - Games and client
 - **Vendor Utilities** - Lenovo Vantage, Dell Update, etc.
 - **Microsoft Store** - Apps and coverage
-- **WSL** - WSL distro updates
+- **WSL** - WSL component updates
 - **Windows Defender** - Signature updates
 - **Ollama** - AI model updates
 - **apt** - Package updates in WSL
@@ -51,7 +51,7 @@ UpdateAll_v3.bat
 | `SkipWebLookup` | Switch | `false` | Skip web-based version lookups |
 | `SkipWingetExport` | Switch | `false` | Skip winget package export to snapshot |
 | `SkipInventory` | Switch | `false` | Skip machine inventory snapshot |
-| `SkipWSL` | Switch | `false` | Skip WSL distro updates |
+| `SkipWSL` | Switch | `false` | Skip WSL component updates |
 | `SkipDefender` | Switch | `false` | Skip Windows Defender signature updates |
 | `SkipOllama` | Switch | `false` | Skip Ollama model updates |
 | `SkipApt` | Switch | `false` | Skip apt package updates in WSL |
@@ -111,7 +111,7 @@ The script creates:
 ## Version History
 
 ### v3.2.0
-- Added WSL distro updates
+- Added WSL component updates (uses wsl --update)
 - Added Windows Defender signature updates
 - Added Ollama model updates
 - Added apt package updates in WSL
@@ -119,7 +119,7 @@ The script creates:
 - Added new skip parameters: SkipWSL, SkipDefender, SkipOllama, SkipApt, SkipPowerShellHelp
 - Updated section numbering from 15 to 20 sections
 - Added wsl and ollama to capability detection
-- Fixed WSL distro parsing to use --list --verbose for better name extraction
+- Fixed WSL to use wsl --update instead of non-existent distro upgrade command
 
 ### v3.1.1
 - Fixed leaked boolean output from helper calls
