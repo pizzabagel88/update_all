@@ -429,6 +429,7 @@ function Update-WingetPackages {
                     Write-Host "    - $line" -ForegroundColor Gray
                 }
                 Write-Host '  Upgrading packages...' -ForegroundColor Cyan
+                Write-Host '  This may take several minutes...' -ForegroundColor Gray
             } else {
                 Write-Host '  No packages available for upgrade' -ForegroundColor Green
             }
@@ -482,6 +483,7 @@ function Update-PythonPackages {
         }
 
         try {
+            Write-Host '  Upgrading pip...' -ForegroundColor Gray
             $pipOutput = & python -m pip install --upgrade pip 2>&1
             if (($pipOutput | Out-String) -match 'Retrying \(Retry') {
                 $result.HadRetries = $true
@@ -500,6 +502,7 @@ function Update-PythonPackages {
         }
 
         try {
+            Write-Host '  Checking for outdated Python packages...' -ForegroundColor Gray
             $json = & python -m pip list --outdated --format=json 2>$null
             if ($LASTEXITCODE -eq 0) {
                 $result.CheckSucceeded = $true
@@ -629,10 +632,12 @@ function Update-WindowsAndDrivers {
             }
 
             Write-Host '  Installing Windows and Microsoft updates...' -ForegroundColor Gray
+            Write-Host '  This may take 10-30 minutes...' -ForegroundColor Gray
             Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -AutoReboot
 
             try {
                 Write-Host '  Running driver-focused Windows Update pass...' -ForegroundColor Gray
+                Write-Host '  Checking for driver updates...' -ForegroundColor Gray
                 Get-WindowsUpdate -MicrosoftUpdate -Category Drivers -AcceptAll -Install -AutoReboot
             } catch {
                 Write-Warn 'Driver-focused Windows Update pass failed or no driver updates were available'
@@ -661,6 +666,7 @@ function Update-CommonPackageManagers {
         return
     }
 
+    Write-Host '  Checking for package managers...' -ForegroundColor Gray
     $actions = New-Object System.Collections.Generic.List[object]
 
     $null = Invoke-IfCommandExists -CommandName 'choco' -MissingMessage 'Chocolatey not found (skipped)' -Action {
@@ -727,6 +733,7 @@ function Update-DotNetAndRust {
     $dotnetDetails = 'dotnet not installed'
 
     if ($script:Capabilities['dotnet']) {
+        Write-Host '  Checking for .NET SDK...' -ForegroundColor Gray
         if (Test-DotNetSdkInstalled) {
             Write-Host '  dotnet found and .NET SDK detected. Updating global tools...' -ForegroundColor Gray
             & dotnet tool update --all --global
@@ -767,6 +774,7 @@ function Update-DotNetAndRust {
 
     $null = Invoke-IfCommandExists -CommandName 'cargo' -MissingMessage 'cargo not found (skipped)' -Action {
         Write-Host '  cargo found. Checking for cargo-install-update...' -ForegroundColor Gray
+        Write-Host '  Checking Rust tooling...' -ForegroundColor Gray
         if (Get-Command 'cargo-install-update' -ErrorAction SilentlyContinue) {
             & cargo-install-update -a
             if ($LASTEXITCODE -eq 0) {
@@ -909,6 +917,7 @@ function Update-VendorUtilities {
         return
     }
 
+    Write-Host '  Scanning for vendor utilities...' -ForegroundColor Gray
     $candidates = @(
         @{ Name='Dell Command Update'; Paths=@('C:\Program Files\Dell\CommandUpdate\dcu-cli.exe'); Args=@('/applyUpdates','-silent'); Match=$null },
         @{ Name='Lenovo System Update'; Paths=@('C:\Program Files (x86)\Lenovo\System Update\tvsu.exe'); Args=@('/CM','-search','A','-action','INSTALL','-includerebootpackages','1'); Match=$null },
@@ -927,6 +936,7 @@ function Update-VendorUtilities {
         @{ Name='SteelSeries GG'; Paths=@('C:\Program Files\SteelSeries\GG\SteelSeriesGG.exe'); Args=@(); Match=$null }
     )
 
+    Write-Host '  Detecting GPU hardware...' -ForegroundColor Gray
     $gpuNames = @()
     try {
         $gpuNames = @(Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue |
@@ -1431,7 +1441,7 @@ function Update-DefenderSignatures {
 function Update-OllamaModels {
     if (-not (Should-RunPhase 'Tools') -or $SkipOllama) { return }
 
-    Write-Section '[16/20] Updating Ollama models...'
+    Write-Section '[18/20] Updating Ollama models...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update Ollama models.'
         Add-SectionResult -Name 'Ollama Models' -Status 'Audit' -Details 'Would update Ollama models'
@@ -1444,6 +1454,7 @@ function Update-OllamaModels {
     $commandPresent = Invoke-IfCommandExists -CommandName 'ollama' -MissingMessage 'ollama not found (skipped)' -Action {
         try {
             Write-Host '  Checking for installed Ollama models...' -ForegroundColor Gray
+            Write-Host '  This may take a moment if models are large...' -ForegroundColor Gray
             $models = & ollama list 2>$null
             if ($LASTEXITCODE -eq 0 -and $models) {
                 $modelList = @($models | Select-Object -Skip 1 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -1453,6 +1464,7 @@ function Update-OllamaModels {
                         $modelName = ($modelLine -split '\s+')[0]
                         if (-not [string]::IsNullOrWhiteSpace($modelName)) {
                             Write-Host "    Pulling latest for $modelName..." -ForegroundColor Gray
+                            Write-Host "    Downloading model updates..." -ForegroundColor Gray
                             & ollama pull $modelName 2>$null
                             $actions.Add([pscustomobject]@{ Name=$modelName; Success=($LASTEXITCODE -eq 0); ExitCode=$LASTEXITCODE }) | Out-Null
                             if ($LASTEXITCODE -eq 0) { Write-Ok "Ollama model '$modelName' updated" }
@@ -1493,7 +1505,7 @@ function Update-OllamaModels {
 function Update-Apt {
     if (-not (Should-RunPhase 'Packages') -or $SkipApt) { return }
 
-    Write-Section '[17/20] Updating apt packages (WSL)...'
+    Write-Section '[16/20] Updating apt packages (WSL)...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update apt packages in WSL.'
         Add-SectionResult -Name 'Apt Packages' -Status 'Audit' -Details 'Would update apt packages'
@@ -1506,6 +1518,7 @@ function Update-Apt {
     $commandPresent = Invoke-IfCommandExists -CommandName 'wsl' -MissingMessage 'wsl not found (skipped)' -Action {
         try {
             Write-Host '  Checking for apt in WSL...' -ForegroundColor Gray
+            Write-Host '  Scanning WSL distributions...' -ForegroundColor Gray
             $distros = & wsl --list 2>$null
             $aptFound = $false
             if ($LASTEXITCODE -eq 0 -and $distros) {
@@ -1569,7 +1582,7 @@ function Update-Apt {
 function Update-PowerShellHelp {
     if (-not (Should-RunPhase 'Tools') -or $SkipPowerShellHelp) { return }
 
-    Write-Section '[18/20] Updating PowerShell help...'
+    Write-Section '[17/20] Updating PowerShell help...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update PowerShell help.'
         Add-SectionResult -Name 'PowerShell Help' -Status 'Audit' -Details 'Would update PowerShell help files'
@@ -1578,6 +1591,7 @@ function Update-PowerShellHelp {
 
     try {
         Write-Host '  Updating PowerShell help...' -ForegroundColor Gray
+        Write-Host '  Downloading help files...' -ForegroundColor Gray
         Update-Help -Force -ErrorAction SilentlyContinue
         Write-Ok 'PowerShell help updated'
         Add-SectionResult -Name 'PowerShell Help' -Status 'Success' -Details 'Help files updated'
@@ -1651,9 +1665,9 @@ Check-GPUDrivers
 Update-MicrosoftStoreApps
 Update-WSLDistros
 Update-DefenderSignatures
-Update-OllamaModels
 Update-Apt
 Update-PowerShellHelp
+Update-OllamaModels
 Report-SystemState
 Finish-Up
 Show-UsageHints
