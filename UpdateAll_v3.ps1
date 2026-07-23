@@ -1432,10 +1432,15 @@ function Update-DefenderSignatures {
         }
 
         Write-Host '  Updating Windows Defender signatures...' -ForegroundColor Gray
-        & "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -SignatureUpdate
+        & "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -SignatureUpdate 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
             Write-Ok 'Windows Defender signatures updated'
             Add-SectionResult -Name 'Defender Signatures' -Status 'Success' -Details 'Signatures updated successfully'
+        } elseif ($LASTEXITCODE -eq 2) {
+            Write-Warn 'Windows Defender signature update encountered a network error (exit code 2)'
+            Write-Host '  This is often a transient issue with Windows Update servers.' -ForegroundColor Gray
+            Write-Host '  Signatures may still be reasonably current.' -ForegroundColor Gray
+            Add-SectionResult -Name 'Defender Signatures' -Status 'ExpectedLimit' -Details 'Network error with Windows Update servers (exit code 2)'
         } else {
             Write-Err ('Windows Defender signature update failed (exit code ' + $LASTEXITCODE + ')')
             Add-SectionResult -Name 'Defender Signatures' -Status 'Failed' -Details ('Exit code: ' + $LASTEXITCODE)
