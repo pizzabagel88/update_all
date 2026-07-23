@@ -440,7 +440,7 @@ function Update-WingetPackages {
             }
         }
 
-        $r3 = Invoke-ExternalCommand -FilePath 'winget' -Arguments @('upgrade','--all','--include-unknown','--accept-source-agreements','--accept-package-agreements') -SuccessMessage 'winget package updates completed' -FailurePrefix 'winget package update failed:'
+        $r3 = Invoke-ExternalCommand -FilePath 'winget' -Arguments @('upgrade','--all','--include-unknown','--accept-source-agreements','--accept-package-agreements','--silent') -SuccessMessage 'winget package updates completed' -FailurePrefix 'winget package update failed:'
         $actions.Add([pscustomobject]@{ Name='upgrade all'; Success=$r3.Success; ExitCode=$r3.ExitCode }) | Out-Null
     }
 
