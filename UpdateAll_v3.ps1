@@ -271,11 +271,13 @@ function Initialize-Capabilities {
         Write-Warn 'Not running as administrator'
     }
 
+    Write-Host '  Checking for installed commands...' -ForegroundColor Gray
     foreach ($cmd in @('winget','python','choco','scoop','npm','pnpm','yarn','dotnet','cargo','poetry','uv','wsl','ollama')) {
         $script:Capabilities[$cmd] = [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
     }
 
     try {
+        Write-Host '  Cleaning up old logs and snapshots...' -ForegroundColor Gray
         Get-ChildItem -Path $script:LogRoot -File -ErrorAction SilentlyContinue |
             Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$LogRetentionDays) } |
             Remove-Item -Force -ErrorAction SilentlyContinue
@@ -289,6 +291,7 @@ function Initialize-Capabilities {
         Write-Warn ('Log/snapshot cleanup encountered an issue: ' + $_)
     }
 
+    Write-Host '  Checking for pending reboot...' -ForegroundColor Gray
     $pending = Test-PendingReboot
     $script:Context.PendingRebootAtStart = $pending.IsPending
     if ($pending.IsPending) {
@@ -321,6 +324,7 @@ function Export-InventorySnapshots {
 
     if (-not $SkipInventory) {
         try {
+            Write-Host '  Collecting system inventory...' -ForegroundColor Gray
             $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction SilentlyContinue
             $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction SilentlyContinue
             $baseBoard = Get-CimInstance -ClassName Win32_BaseBoard -ErrorAction SilentlyContinue
@@ -374,6 +378,7 @@ function Export-InventorySnapshots {
         $didWingetExport = $false
         $null = Invoke-IfCommandExists -CommandName 'winget' -MissingMessage 'winget not found; export skipped' -Action {
             try {
+                Write-Host '  Exporting winget package list...' -ForegroundColor Gray
                 $exportPath = Join-Path $script:SnapshotRoot ('winget-export-' + $script:RunStamp + '.json')
                 winget export -o $exportPath --accept-source-agreements | Out-Null
                 if ($LASTEXITCODE -eq 0 -and (Test-Path $exportPath)) {
@@ -633,12 +638,13 @@ function Update-WindowsAndDrivers {
 
             Write-Host '  Installing Windows and Microsoft updates...' -ForegroundColor Gray
             Write-Host '  This may take 10-30 minutes...' -ForegroundColor Gray
-            Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -AutoReboot
+            Write-Host '  Please wait, do not interrupt...' -ForegroundColor Gray
+            Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -AutoReboot -Confirm:$false
 
             try {
                 Write-Host '  Running driver-focused Windows Update pass...' -ForegroundColor Gray
                 Write-Host '  Checking for driver updates...' -ForegroundColor Gray
-                Get-WindowsUpdate -MicrosoftUpdate -Category Drivers -AcceptAll -Install -AutoReboot
+                Get-WindowsUpdate -MicrosoftUpdate -Category Drivers -AcceptAll -Install -AutoReboot -Confirm:$false
             } catch {
                 Write-Warn 'Driver-focused Windows Update pass failed or no driver updates were available'
             }
@@ -1148,6 +1154,7 @@ function Check-BIOS {
     }
 
     try {
+        Write-Host '  Reading motherboard information...' -ForegroundColor Gray
         $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
         $bios = Get-CimInstance -ClassName Win32_BIOS
         $baseBoard = Get-CimInstance -ClassName Win32_BaseBoard
@@ -1219,6 +1226,7 @@ function Check-GPUDrivers {
     }
 
     try {
+        Write-Host '  Detecting graphics hardware...' -ForegroundColor Gray
         $gpus = Get-CimInstance -ClassName Win32_VideoController
         $physicalGpu = $null
 
@@ -1312,7 +1320,7 @@ function Update-MicrosoftStoreApps {
     $null = Invoke-IfCommandExists -CommandName 'winget' -MissingMessage 'winget not found (skipped)' -Action {
         $commandPresent = $true
         try {
-            Write-Host '  winget source list:' -ForegroundColor Gray
+            Write-Host '  Listing winget sources...' -ForegroundColor Gray
             winget source list
             Write-Ok 'winget source list completed'
             Add-SectionResult -Name 'Microsoft Store Coverage' -Status 'Success' -Details 'winget source list completed'
