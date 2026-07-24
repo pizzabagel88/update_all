@@ -1317,7 +1317,7 @@ function Update-MicrosoftStoreApps {
     }
 
     $commandPresent = $false
-    $null = Invoke-IfCommandExists -CommandName 'winget' -MissingMessage 'winget not found (skipped)' -Action {
+    if (Get-Command 'winget' -ErrorAction SilentlyContinue) {
         $commandPresent = $true
         try {
             Write-Host '  Listing winget sources...' -ForegroundColor Gray
@@ -1328,6 +1328,8 @@ function Update-MicrosoftStoreApps {
             Write-Err ('winget source list failed: ' + $_)
             Add-SectionResult -Name 'Microsoft Store Coverage' -Status 'Failed' -Details $_.ToString()
         }
+    } else {
+        Write-Host '  winget not found (skipped)' -ForegroundColor Gray
     }
 
     if (-not $commandPresent) {
@@ -1338,7 +1340,7 @@ function Update-MicrosoftStoreApps {
 function Report-SystemState {
     if (-not (Should-RunPhase 'Core')) { return }
 
-    Write-Section '[13/20] Reporting current system state...'
+    Write-Section '[18/20] Reporting current system state...'
     try {
         $pending = Test-PendingReboot
         Write-Host ('  Pending reboot right now: ' + $pending.IsPending) -ForegroundColor Gray
@@ -1373,7 +1375,7 @@ function Report-SystemState {
 function Update-WSLDistros {
     if (-not (Should-RunPhase 'Packages') -or $SkipWSL) { return }
 
-    Write-Section '[14/20] Updating WSL components...'
+    Write-Section '[13/20] Updating WSL components...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update WSL components.'
         Add-SectionResult -Name 'WSL Components' -Status 'Audit' -Details 'Would update WSL'
@@ -1416,7 +1418,7 @@ function Update-WSLDistros {
 function Update-DefenderSignatures {
     if (-not (Should-RunPhase 'Core') -or $SkipDefender) { return }
 
-    Write-Section '[15/20] Updating Windows Defender signatures...'
+    Write-Section '[14/20] Updating Windows Defender signatures...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update Windows Defender signatures.'
         Add-SectionResult -Name 'Defender Signatures' -Status 'Audit' -Details 'Would update Windows Defender definitions'
@@ -1454,7 +1456,7 @@ function Update-DefenderSignatures {
 function Update-OllamaModels {
     if (-not (Should-RunPhase 'Tools') -or $SkipOllama) { return }
 
-    Write-Section '[18/20] Updating Ollama models...'
+    Write-Section '[17/20] Updating Ollama models...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update Ollama models.'
         Add-SectionResult -Name 'Ollama Models' -Status 'Audit' -Details 'Would update Ollama models'
@@ -1518,7 +1520,7 @@ function Update-OllamaModels {
 function Update-Apt {
     if (-not (Should-RunPhase 'Packages') -or $SkipApt) { return }
 
-    Write-Section '[16/20] Updating apt packages (WSL)...'
+    Write-Section '[15/20] Updating apt packages (WSL)...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update apt packages in WSL.'
         Add-SectionResult -Name 'Apt Packages' -Status 'Audit' -Details 'Would update apt packages'
@@ -1565,7 +1567,8 @@ function Update-Apt {
                 }
             }
             if (-not $aptFound) {
-                Write-Host '  apt not found in any WSL distro' -ForegroundColor Gray
+                Write-Host '  apt not found in any WSL distro (skipped)' -ForegroundColor Gray
+                Write-Host '  Note: Some WSL distros like docker-desktop do not include apt' -ForegroundColor Gray
             }
         } catch {
             Write-Err ('apt update failed: ' + $_)
@@ -1595,7 +1598,7 @@ function Update-Apt {
 function Update-PowerShellHelp {
     if (-not (Should-RunPhase 'Tools') -or $SkipPowerShellHelp) { return }
 
-    Write-Section '[17/20] Updating PowerShell help...'
+    Write-Section '[16/20] Updating PowerShell help...'
     if ($AuditOnly) {
         Write-Info 'AuditOnly enabled. Would update PowerShell help.'
         Add-SectionResult -Name 'PowerShell Help' -Status 'Audit' -Details 'Would update PowerShell help files'
@@ -1605,7 +1608,7 @@ function Update-PowerShellHelp {
     try {
         Write-Host '  Updating PowerShell help...' -ForegroundColor Gray
         Write-Host '  Downloading help files...' -ForegroundColor Gray
-        Update-Help -Force -ErrorAction SilentlyContinue
+        Update-Help -Force -ErrorAction SilentlyContinue | Out-Null
         Write-Ok 'PowerShell help updated'
         Add-SectionResult -Name 'PowerShell Help' -Status 'Success' -Details 'Help files updated'
     } catch {
