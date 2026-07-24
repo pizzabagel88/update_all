@@ -62,7 +62,8 @@ function Write-BlankLine {
 function Write-Section {
     param([string]$Text)
     Write-BlankLine
-    Write-Host $Text -ForegroundColor Yellow
+    $timestamp = Get-Date -Format 'HH:mm:ss'
+    Write-Host "[$timestamp] $Text" -ForegroundColor Yellow
 }
 
 function Write-Ok {
@@ -440,6 +441,8 @@ function Update-WingetPackages {
             }
         }
 
+        Write-BlankLine
+
         $r3 = Invoke-ExternalCommand -FilePath 'winget' -Arguments @('upgrade','--all','--include-unknown','--accept-source-agreements','--accept-package-agreements','--silent') -SuccessMessage 'winget package updates completed' -FailurePrefix 'winget package update failed:'
         $actions.Add([pscustomobject]@{ Name='upgrade all'; Success=$r3.Success; ExitCode=$r3.ExitCode }) | Out-Null
     }
@@ -507,6 +510,7 @@ function Update-PythonPackages {
         }
 
         try {
+            Write-BlankLine
             Write-Host '  Checking for outdated Python packages...' -ForegroundColor Gray
             $json = & python -m pip list --outdated --format=json 2>$null
             if ($LASTEXITCODE -eq 0) {
@@ -515,6 +519,7 @@ function Update-PythonPackages {
                 $text = ($json | Out-String).Trim()
                 if ([string]::IsNullOrWhiteSpace($text) -or $text -eq '[]') {
                     Write-Ok 'No outdated Python packages found'
+                    Write-BlankLine
                     $result.OutdatedCount = 0
                 } else {
                     $parsed = $text | ConvertFrom-Json -ErrorAction Stop
@@ -1181,12 +1186,48 @@ function Check-BIOS {
         $model = $baseBoard.Product -replace '[\s/]', '_'
         $flashMyBoardUrl = "https://flashmyboard.com/mb/${manufacturer}_${model}"
 
-        Write-Host '  Check for BIOS updates at:' -ForegroundColor Cyan
-        Write-Host "  $flashMyBoardUrl" -ForegroundColor Yellow
-        Write-Host '  Please visit this link to download and install the latest firmware.' -ForegroundColor Gray
-        Write-Host '  This script cannot automatically install BIOS updates.' -ForegroundColor Gray
+        Write-Host '  Checking flashmyboard.com for latest BIOS version...' -ForegroundColor Gray
+        try {
+            $response = Invoke-WebRequest -Uri $flashMyBoardUrl -UseBasicParsing -TimeoutSec 15
+            $content = $response.Content
 
-        Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details "Firmware check link provided: $flashMyBoardUrl"
+            # Try to extract BIOS version from the page
+            $latestVersion = $null
+            $versionPattern = 'Version\s*[:\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+            $match = [regex]::Match($content, $versionPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if ($match.Success) {
+                $latestVersion = $match.Groups[1].Value
+            }
+
+            if ($latestVersion) {
+                Write-Host "  Latest BIOS version found: $latestVersion" -ForegroundColor Cyan
+                $cmp = Compare-VersionStrings -A $bios.SMBIOSBIOSVersion -B $latestVersion
+                if ($cmp -lt 0) {
+                    Write-Warn "BIOS update available: installed $($bios.SMBIOSBIOSVersion), latest $latestVersion"
+                    Write-Host '  Check for BIOS updates at:' -ForegroundColor Cyan
+                    Write-Host "  $flashMyBoardUrl" -ForegroundColor Yellow
+                    Add-SectionResult -Name 'BIOS Check' -Status 'Partial' -Details "BIOS update available: installed $($bios.SMBIOSBIOSVersion), latest $latestVersion"
+                } elseif ($cmp -eq 0) {
+                    Write-Ok "BIOS is up to date (version $latestVersion)"
+                    Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details "BIOS is up to date (version $latestVersion)"
+                } else {
+                    Write-Ok "Installed BIOS ($($bios.SMBIOSBIOSVersion)) appears newer than latest found ($latestVersion)"
+                    Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details "Installed BIOS appears newer than latest found"
+                }
+            } else {
+                Write-Host '  Could not determine latest BIOS version from website' -ForegroundColor Gray
+                Write-Host '  Check for BIOS updates at:' -ForegroundColor Cyan
+                Write-Host "  $flashMyBoardUrl" -ForegroundColor Yellow
+                Write-Host '  Please visit this link to download and install the latest firmware.' -ForegroundColor Gray
+                Add-SectionResult -Name 'BIOS Check' -Status 'Partial' -Details "Could not parse latest version; manual check required: $flashMyBoardUrl"
+            }
+        } catch {
+            Write-Host '  Could not fetch BIOS information from website' -ForegroundColor Gray
+            Write-Host '  Check for BIOS updates at:' -ForegroundColor Cyan
+            Write-Host "  $flashMyBoardUrl" -ForegroundColor Yellow
+            Write-Host '  Please visit this link to download and install the latest firmware.' -ForegroundColor Gray
+            Add-SectionResult -Name 'BIOS Check' -Status 'Partial' -Details "Website fetch failed; manual check required: $flashMyBoardUrl"
+        }
     } catch {
         Write-Err ('Failed to get motherboard information: ' + $_)
         Add-SectionResult -Name 'BIOS Check' -Status 'Failed' -Details $_.ToString()
