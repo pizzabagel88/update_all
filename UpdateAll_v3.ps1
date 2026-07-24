@@ -1171,43 +1171,22 @@ function Check-BIOS {
             return
         }
 
-        $latestBios = $null
-        if ($baseBoard.Manufacturer -match 'ASRock') {
-            $latestBios = Get-LatestASRockBiosInfo -BoardProduct $baseBoard.Product -BoardManufacturer $baseBoard.Manufacturer
-        } elseif ($baseBoard.Manufacturer -match 'ASUSTeK|ASUS') {
-            $latestBios = Get-LatestAsusBiosInfo -BoardProduct $baseBoard.Product
-        } elseif ($baseBoard.Manufacturer -match 'Micro-Star|MSI') {
-            $latestBios = Get-LatestMsiBiosInfo -BoardProduct $baseBoard.Product
-        }
+        # Construct flashmyboard.com URL
+        $manufacturer = if ($baseBoard.Manufacturer -match 'ASUSTeK|ASUS') { 'ASUS' }
+                       elseif ($baseBoard.Manufacturer -match 'Micro-Star|MSI') { 'MSI' }
+                       elseif ($baseBoard.Manufacturer -match 'ASRock') { 'ASRock' }
+                       elseif ($baseBoard.Manufacturer -match 'Gigabyte|GIGABYTE') { 'Gigabyte' }
+                       else { $baseBoard.Manufacturer }
 
-        if ($latestBios) {
-            if ($latestBios.LatestVersion) {
-                Write-Host ('  Latest online BIOS version: ' + $latestBios.LatestVersion) -ForegroundColor Gray
-                if ($latestBios.LatestDate) { Write-Host ('  Latest online BIOS date: ' + $latestBios.LatestDate) -ForegroundColor Gray }
-            }
-            $displayLink = if ($latestBios.DirectLink) { $latestBios.DirectLink } else { $latestBios.SourceUrl }
-            Write-Host ('  Support Link: ' + $displayLink) -ForegroundColor Gray
+        $model = $baseBoard.Product -replace '[\s/]', '_'
+        $flashMyBoardUrl = "https://flashmyboard.com/mb/${manufacturer}_${model}"
 
-            $cmp = if ($latestBios.LatestVersion) { Compare-VersionStrings -A $bios.SMBIOSBIOSVersion -B $latestBios.LatestVersion } else { $null }
+        Write-Host '  Check for BIOS updates at:' -ForegroundColor Cyan
+        Write-Host "  $flashMyBoardUrl" -ForegroundColor Yellow
+        Write-Host '  Please visit this link to download and install the latest firmware.' -ForegroundColor Gray
+        Write-Host '  This script cannot automatically install BIOS updates.' -ForegroundColor Gray
 
-            if ($cmp -lt 0) {
-                Write-Warn ('BIOS update available: installed ' + $bios.SMBIOSBIOSVersion + ', latest ' + $latestBios.LatestVersion)
-                Add-SectionResult -Name 'BIOS Check' -Status 'Partial' -Details 'BIOS update appears available'
-            } elseif ($cmp -eq 0) {
-                Write-Ok 'BIOS is up to date'
-                Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details 'Installed BIOS matches parsed latest version'
-            } elseif ($cmp -gt 0) {
-                Write-Ok 'Installed BIOS appears newer than parsed support-table value'
-                Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details 'Installed BIOS appears newer than parsed website result'
-            } else {
-                Write-ExpectedWarn "Automated version comparison not supported for $($baseBoard.Manufacturer)."
-                if ($latestBios.Note) { Write-Host ("  Note: " + $latestBios.Note) -ForegroundColor Gray }
-                Add-SectionResult -Name 'BIOS Check' -Status 'ExpectedLimit' -Details 'Manual check required (dynamic vendor site)'
-            }
-        } else {
-            Write-ExpectedWarn 'Online BIOS lookup unavailable. This is often expected because vendor support pages change layout or block automation.'
-            Add-SectionResult -Name 'BIOS Check' -Status 'ExpectedLimit' -Details 'Vendor page unavailable or unparseable'
-        }
+        Add-SectionResult -Name 'BIOS Check' -Status 'Success' -Details "Firmware check link provided: $flashMyBoardUrl"
     } catch {
         Write-Err ('Failed to get motherboard information: ' + $_)
         Add-SectionResult -Name 'BIOS Check' -Status 'Failed' -Details $_.ToString()
