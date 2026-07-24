@@ -428,6 +428,8 @@ function Update-WingetPackages {
         $upgradeList = & winget list --upgrade-available --accept-source-agreements 2>$null
         if ($LASTEXITCODE -eq 0 -and $upgradeList) {
             $packageLines = @($upgradeList | Select-Object -Skip 2 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            # Filter out summary lines that don't look like package entries
+            $packageLines = @($packageLines | Where-Object { $_ -notmatch '^\d+\s+upgrades? available' })
             $packageCount = $packageLines.Count
             if ($packageCount -gt 0) {
                 Write-Host "  Found $packageCount packages available for upgrade:" -ForegroundColor Cyan
@@ -644,9 +646,11 @@ function Update-WindowsAndDrivers {
             Write-Host '  Installing Windows and Microsoft updates...' -ForegroundColor Gray
             Write-Host '  This may take 10-30 minutes...' -ForegroundColor Gray
             Write-Host '  Please wait, do not interrupt...' -ForegroundColor Gray
+            Write-BlankLine
             Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -AutoReboot -Confirm:$false
 
             try {
+                Write-BlankLine
                 Write-Host '  Running driver-focused Windows Update pass...' -ForegroundColor Gray
                 Write-Host '  Checking for driver updates...' -ForegroundColor Gray
                 Get-WindowsUpdate -MicrosoftUpdate -Category Drivers -AcceptAll -Install -AutoReboot -Confirm:$false
@@ -929,6 +933,7 @@ function Update-VendorUtilities {
     }
 
     Write-Host '  Scanning for vendor utilities...' -ForegroundColor Gray
+    Write-BlankLine
     $candidates = @(
         @{ Name='Dell Command Update'; Paths=@('C:\Program Files\Dell\CommandUpdate\dcu-cli.exe'); Args=@('/applyUpdates','-silent'); Match=$null },
         @{ Name='Lenovo System Update'; Paths=@('C:\Program Files (x86)\Lenovo\System Update\tvsu.exe'); Args=@('/CM','-search','A','-action','INSTALL','-includerebootpackages','1'); Match=$null },
@@ -947,14 +952,15 @@ function Update-VendorUtilities {
         @{ Name='SteelSeries GG'; Paths=@('C:\Program Files\SteelSeries\GG\SteelSeriesGG.exe'); Args=@(); Match=$null }
     )
 
-    Write-Host '  Detecting GPU hardware...' -ForegroundColor Gray
     $gpuNames = @()
     try {
+        Write-Host '  Detecting GPU hardware...' -ForegroundColor Gray
         $gpuNames = @(Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notmatch 'Virtual|Remote|Basic Display|Microsoft Hyper-V|Miracast|Indirect' } |
             Select-Object -ExpandProperty Name)
     } catch {}
 
+    Write-BlankLine
     $found = 0
     $launched = 0
 
@@ -1188,15 +1194,24 @@ function Check-BIOS {
 
         Write-Host '  Checking flashmyboard.com for latest BIOS version...' -ForegroundColor Gray
         try {
-            $response = Invoke-WebRequest -Uri $flashMyBoardUrl -UseBasicParsing -TimeoutSec 15
+            $response = Invoke-WebRequest -Uri $flashMyBoardUrl -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
             $content = $response.Content
 
-            # Try to extract BIOS version from the page
+            # Try to extract BIOS version from the page - look for common patterns
             $latestVersion = $null
-            $versionPattern = 'Version\s*[:\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
-            $match = [regex]::Match($content, $versionPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-            if ($match.Success) {
-                $latestVersion = $match.Groups[1].Value
+            $versionPatterns = @(
+                'Version\s*[:\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+                'BIOS\s*Version\s*[:\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+                'v([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+                '([0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*BIOS'
+            )
+            
+            foreach ($pattern in $versionPatterns) {
+                $match = [regex]::Match($content, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                if ($match.Success) {
+                    $latestVersion = $match.Groups[1].Value
+                    break
+                }
             }
 
             if ($latestVersion) {
